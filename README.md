@@ -1,10 +1,10 @@
-# EARLY RELEASE
+# Activity Manager Card - Updated Version
 
-This was designed to solve a personal need and I'm now trying to prepare it for others to use. That means several things can break between releases.
+This is an updated version of the Activity Manager Card that works with the new state-based Activity Manager integration. The card now uses entity states (scheduled/due/overdue) instead of date calculations.
 
 # activity-manager-card
 
-A Lovelace card designed as a companion to the [Activity Manager](https://github.com/pathofleastresistor/activity-manager) component.
+A Lovelace card designed as a companion to the [Activity Manager](https://github.com/dingausmwald/activity-manager) component.
 
 ## Installation
 
@@ -17,7 +17,7 @@ A Lovelace card designed as a companion to the [Activity Manager](https://github
 
 1. Open the HACS section of Home Assistant.
 2. Click the "..." button in the top right corner and select "Custom Repositories."
-3. In the window that opens paste this Github URL.
+3. In the window that opens paste this Github URL: `https://github.com/dingausmwald/activity-manager-card`
 4. Select "Lovelace"
 5. In the window that opens when you select it click om "Install This Repository in HACS"
 
@@ -66,7 +66,14 @@ If you want to customize the card style, you can use [Lovlace Card Mod](https://
 | .am-due       | Style the date if it's due. By default, the text is red. |
 | .am-action    | Style the action column                                  |
 
+## Changes in this version
+
+-   Uses entity states (configurable terms like scheduled/due/overdue) instead of date calculations
+-   State calculations are now handled by the Activity Manager integration
+-   Card displays the current state and relative time based on `last_completed` attribute
+-   `showDueOnly` and `soonHours` options work with the new state system
+
 ## More information
 
 -   Activities are stored in .activities_list.json in your `<config>` folder
--   An entity is created for each activity (e.g. `activity_manager.<category>_<activity>`). The state of the activity is when the activity is due. You can use this entity to build notifications or your own custom cards.
+-   An entity is created for each activity (e.g. `activity_manager.<category>_<activity>`). The state uses configurable terms (default: scheduled/due/overdue). You can use this entity to build notifications or your own custom cards.

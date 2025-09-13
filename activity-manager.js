@@ -5,36 +5,9 @@ import {
     repeat,
 } from "https://cdn.jsdelivr.net/gh/lit/dist@2/all/lit-all.min.js";
 
-export const utils = {
-    _formatTimeAgo: (date) => {
-        const formatter = new Intl.RelativeTimeFormat(undefined, {
-            numeric: "auto",
-        });
-
-        const DIVISIONS = [
-            { amount: 60, name: "seconds" },
-            { amount: 60, name: "minutes" },
-            { amount: 24, name: "hours" },
-            { amount: 7, name: "days" },
-            { amount: 4.34524, name: "weeks" },
-            { amount: 12, name: "months" },
-            { amount: Number.POSITIVE_INFINITY, name: "years" },
-        ];
-        let duration = (date - new Date()) / 1000;
-
-        for (let i = 0; i < DIVISIONS.length; i++) {
-            const division = DIVISIONS[i];
-            if (Math.abs(duration) < division.amount) {
-                return formatter.format(Math.round(duration), division.name);
-            }
-            duration /= division.amount;
-        }
-    },
-
-    _getNumber: (value, defaultValue) => {
-        const num = parseInt(value, 10);
-        return isNaN(num) ? defaultValue : num;
-    },
+const _getNumber = (value, defaultValue) => {
+    const num = parseInt(value, 10);
+    return isNaN(num) ? defaultValue : num;
 };
 
 class ActivityManagerCard extends LitElement {
@@ -91,11 +64,54 @@ class ActivityManagerCard extends LitElement {
         }
     }
 
-    _ifDue(activity, due, dueSoon) {
-        if (activity.difference < 0) return due;
-        if (activity.difference < this._config.soonHours * 60 * 60 * 1000)
-            return dueSoon;
+    _getStateClass(activity) {
+        const entityId = `activity_manager.${activity.category.toLowerCase()}_${activity.name.toLowerCase().replace(/\s+/g, '_')}`;
+        const entity = this._hass.states[entityId];
+        if (!entity) return "";
+        
+        const stateConfig = entity.attributes.state_config || ["scheduled", "due", "overdue"];
+        const currentStateIndex = stateConfig.indexOf(entity.state);
+        
+        if (currentStateIndex === 2) return "am-due";
+        if (currentStateIndex === 1) {
+            // Check if within soonHours for due-soon styling
+            if (entity.attributes.last_completed) {
+                const lastCompleted = new Date(entity.attributes.last_completed);
+                const now = new Date();
+                const hoursSinceCompleted = (now - lastCompleted) / (1000 * 60 * 60);
+                if (hoursSinceCompleted <= this._config.soonHours) {
+                    return "am-due-soon";
+                }
+            }
+            return "am-due";
+        }
         return "";
+    }
+
+    _getActivityState(activity) {
+        const entityId = `activity_manager.${activity.category.toLowerCase()}_${activity.name.toLowerCase().replace(/\s+/g, '_')}`;
+        const entity = this._hass.states[entityId];
+        if (!entity) return "";
+        
+        // Show last completed date if available
+        if (entity.attributes.last_completed) {
+            const lastCompleted = new Date(entity.attributes.last_completed);
+            const formatter = new Intl.RelativeTimeFormat(undefined, {
+                numeric: "auto",
+            });
+            const now = new Date();
+            const diffMs = lastCompleted - now;
+            const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+            
+            if (Math.abs(diffHours) < 24) {
+                return formatter.format(diffHours, "hours");
+            } else {
+                const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+                return formatter.format(diffDays, "days");
+            }
+        }
+        
+        return entity.state;
     }
 
     render() {
@@ -111,12 +127,7 @@ class ActivityManagerCard extends LitElement {
                                 <div
                                     @click=${() =>
                                         this._showUpdateDialog(activity)}
-                                    class="am-item
-                                    ${this._ifDue(
-                                        activity,
-                                        "am-due",
-                                        "am-due-soon"
-                                    )}"
+                                    class="am-item ${this._getStateClass(activity)}"
                                 >
                                     <div class="am-icon">
                                         <ha-icon
@@ -131,9 +142,7 @@ class ActivityManagerCard extends LitElement {
                                             ${activity.name}
                                         </div>
                                         <div class="am-item-secondary">
-                                            ${utils._formatTimeAgo(
-                                                activity.due
-                                            )}
+                                            ${this._getActivityState(activity)}
                                         </div>
                                     </span>
                                     ${this._renderActionButton(activity)}
@@ -339,19 +348,19 @@ class ActivityManagerCard extends LitElement {
         let last_completed = this.shadowRoot.querySelector("#last-completed");
 
         let frequency = {};
-        frequency.days = utils._getNumber(
+        frequency.days = _getNumber(
             this.shadowRoot.querySelector("#frequency-day").value,
             0
         );
-        frequency.hours = utils._getNumber(
+        frequency.hours = _getNumber(
             this.shadowRoot.querySelector("#frequency-hour").value,
             0
         );
-        frequency.minutes = utils._getNumber(
+        frequency.minutes = _getNumber(
             this.shadowRoot.querySelector("#frequency-minute").value,
             0
         );
-        frequency.seconds = utils._getNumber(
+        frequency.seconds = _getNumber(
             this.shadowRoot.querySelector("#frequency-second").value,
             0
         );
@@ -377,20 +386,6 @@ class ActivityManagerCard extends LitElement {
             })) || [];
 
         this._activities = items
-            .map((item) => {
-                const completed = new Date(item.last_completed);
-                const due = new Date(completed.valueOf() + item.frequency_ms);
-                //const due = new Date(new Date(item.last_completed).setDate(new Date(item.last_completed).getDate() + item.frequency_ms));
-                const now = new Date();
-                const difference = due - now; // miliseconds
-
-                return {
-                    ...item,
-                    due: due,
-                    difference: difference,
-                    time_unit: "day",
-                };
-            })
             .filter((item) => {
                 if ("category" in this._config)
                     return (
@@ -400,7 +395,15 @@ class ActivityManagerCard extends LitElement {
                 return true;
             })
             .filter((item) => {
-                if (this._config.showDueOnly) return item["difference"] < 0;
+                if (this._config.showDueOnly) {
+                    const entityId = `activity_manager.${item.category.toLowerCase()}_${item.name.toLowerCase().replace(/\s+/g, '_')}`;
+                    const entity = this._hass.states[entityId];
+                    if (entity) {
+                        const stateConfig = entity.attributes.state_config || ["scheduled", "due", "overdue"];
+                        const currentStateIndex = stateConfig.indexOf(entity.state);
+                        return currentStateIndex >= 1; // due or overdue
+                    }
+                }
                 return true;
             })
             .sort((a, b) => {
@@ -697,7 +700,6 @@ class ActivityManagerCardEditor extends LitElement {
             icon: "Icon",
             showDueOnly: "Only show activities that are due",
             soonHours: "Soon to be due (styles the activity)",
-            mode: "Manage mode",
         };
         return labelMap[schema.name];
     }
