@@ -89,29 +89,34 @@ class ActivityManagerCard extends LitElement {
     }
 
     _getActivityState(activity) {
-        const entityId = `activity_manager.${activity.category.toLowerCase()}_${activity.name.toLowerCase().replace(/\s+/g, '_')}`;
-        const entity = this._hass.states[entityId];
-        if (!entity) return "";
+        const lastCompleted = new Date(activity.last_completed);
+        const nextDue = new Date(lastCompleted.getTime() + activity.frequency_ms);
+        const now = new Date();
+        const diffMs = nextDue - now;
         
-        // Show last completed date if available
-        if (entity.attributes.last_completed) {
-            const lastCompleted = new Date(entity.attributes.last_completed);
-            const formatter = new Intl.RelativeTimeFormat(undefined, {
-                numeric: "auto",
-            });
-            const now = new Date();
-            const diffMs = lastCompleted - now;
-            const diffHours = Math.round(diffMs / (1000 * 60 * 60));
-            
-            if (Math.abs(diffHours) < 24) {
-                return formatter.format(diffHours, "hours");
-            } else {
-                const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-                return formatter.format(diffDays, "days");
+        const formatter = new Intl.RelativeTimeFormat(undefined, {
+            numeric: "auto",
+        });
+        
+        const DIVISIONS = [
+            { amount: 60, name: "seconds" },
+            { amount: 60, name: "minutes" },
+            { amount: 24, name: "hours" },
+            { amount: 7, name: "days" },
+            { amount: 4.34524, name: "weeks" },
+            { amount: 12, name: "months" },
+            { amount: Number.POSITIVE_INFINITY, name: "years" },
+        ];
+        
+        let duration = diffMs / 1000;
+        
+        for (let i = 0; i < DIVISIONS.length; i++) {
+            const division = DIVISIONS[i];
+            if (Math.abs(duration) < division.amount) {
+                return formatter.format(Math.round(duration), division.name);
             }
+            duration /= division.amount;
         }
-        
-        return entity.state;
     }
 
     render() {
