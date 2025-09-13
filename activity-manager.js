@@ -13,6 +13,7 @@ const _getNumber = (value, defaultValue) => {
 class ActivityManagerCard extends LitElement {
     _currentItem = null;
     _activities = [];
+    _showActions = false;
 
     static getConfigElement() {
         return document.createElement("activity-manager-card-editor");
@@ -164,25 +165,34 @@ class ActivityManagerCard extends LitElement {
 
     _renderActionButton(activity) {
         return html`
-            <div class="am-action">
-                ${this._config.mode == "manage"
-                    ? html`
-                          <mwc-icon-button
-                              @click=${(ev) =>
-                                  this._showRemoveDialog(ev, activity)}
-                              data-am-id=${activity.id}
-                          >
-                              <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  viewBox="0 0 24 24"
-                              >
-                                  <path
-                                      d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"
-                                  />
-                              </svg>
-                          </mwc-icon-button>
-                      `
-                    : ``}
+            <div class="am-action" style="display: ${this._showActions ? 'grid' : 'none'}">
+                <mwc-icon-button
+                    @click=${(ev) => this._completeActivity(ev, activity)}
+                    class="am-action-button"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            d="M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z"
+                        />
+                    </svg>
+                </mwc-icon-button>
+                <mwc-icon-button
+                    @click=${(ev) => this._showRemoveDialog(ev, activity)}
+                    data-am-id=${activity.id}
+                    class="am-action-button"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                    >
+                        <path
+                            d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z"
+                        />
+                    </svg>
+                </mwc-icon-button>
             </div>
         `;
     }
@@ -271,46 +281,76 @@ class ActivityManagerCard extends LitElement {
                             />
                         </svg>
                     </mwc-icon-button>
-                    <mwc-icon-button @click=${this._switchMode}>
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                d="M12,16A2,2 0 0,1 14,18A2,2 0 0,1 12,20A2,2 0 0,1 10,18A2,2 0 0,1 12,16M12,10A2,2 0 0,1 14,12A2,2 0 0,1 12,14A2,2 0 0,1 10,12A2,2 0 0,1 12,10M12,4A2,2 0 0,1 14,6A2,2 0 0,1 12,8A2,2 0 0,1 10,6A2,2 0 0,1 12,4Z"
-                            />
-                        </svg>
-                    </mwc-icon-button>
+                    ${this._config.mode == "manage"
+                        ? html`
+                              <mwc-icon-button @click=${this._switchMode}>
+                                  <svg
+                                      xmlns="http://www.w3.org/2000/svg"
+                                      viewBox="0 0 24 24"
+                                  >
+                                      <path
+                                          d="M12,16A2,2 0 0,1 14,18A2,2 0 0,1 12,20A2,2 0 0,1 10,18A2,2 0 0,1 12,16M12,10A2,2 0 0,1 14,12A2,2 0 0,1 12,14A2,2 0 0,1 10,12A2,2 0 0,1 12,10M12,4A2,2 0 0,1 14,6A2,2 0 0,1 12,8A2,2 0 0,1 10,6A2,2 0 0,1 12,4Z"
+                                      />
+                                  </svg>
+                              </mwc-icon-button>
+                          `
+                        : ``}
                 </div>
             </div>
         `;
     }
 
     _renderUpdateDialog() {
-        const date = new Date();
-        const year = date.getFullYear();
-        const month = (date.getMonth() + 1).toString().padStart(2, "0");
-        const day = date.getDate().toString().padStart(2, "0");
-        const hours = date.getHours().toString().padStart(2, "0");
-        const minutes = date.getMinutes().toString().padStart(2, "0");
-        let val = `${year}-${month}-${day}T${hours}:${minutes}`;
+        if (!this._currentItem) return html``;
+        
+        const lastCompleted = new Date(this._currentItem.last_completed);
+        const year = lastCompleted.getFullYear();
+        const month = (lastCompleted.getMonth() + 1).toString().padStart(2, "0");
+        const day = lastCompleted.getDate().toString().padStart(2, "0");
+        const hours = lastCompleted.getHours().toString().padStart(2, "0");
+        const minutes = lastCompleted.getMinutes().toString().padStart(2, "0");
+        const lastCompletedValue = `${year}-${month}-${day}T${hours}:${minutes}`;
 
         return html`
-            <ha-dialog class="confirm-update" heading="Confirm">
-                <div class="confirm-grid">
-                    <div>
-                        Yay, you did it! 🎉 If you completed this earlier, feel
-                        free to change the date and time below. Great job on
-                        completing your activity!
+            <ha-dialog class="confirm-update" heading="Edit Activity">
+                <form>
+                    <div class="am-update-form">
+                        <div class="form-item-full">
+                            <ha-textfield type="text" id="update-name" label="Name" value="${this._currentItem.name}">
+                            </ha-textfield>
+                        </div>
+
+                        <div class="form-item-full">
+                            <ha-textfield type="text" id="update-category" label="Category" value="${this._currentItem.category}">
+                            </ha-textfield>
+                        </div>
+                        
+                        <div class="form-item">
+                            <label for="update-frequency-day">Frequency</label>
+                            <div class="duration-input">
+                                <ha-textfield type="number" inputmode="numeric" no-spinner label="dd" id="update-frequency-day" value="${Math.floor(this._currentItem.frequency_ms / (1000 * 60 * 60 * 24))}"></ha-textfield>
+                                <ha-textfield type="number" inputmode="numeric" no-spinner label="hh" id="update-frequency-hour" value="${Math.floor((this._currentItem.frequency_ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))}"></ha-textfield>
+                                <ha-textfield type="number" inputmode="numeric" no-spinner label="mm" id="update-frequency-minute" value="${Math.floor((this._currentItem.frequency_ms % (1000 * 60 * 60)) / (1000 * 60))}"></ha-textfield>
+                                <ha-textfield type="number" inputmode="numeric" no-spinner label="ss" id="update-frequency-second" value="${Math.floor((this._currentItem.frequency_ms % (1000 * 60)) / 1000)}"></ha-textfield>
+                            </div>
+                        </div>
+
+                        <div class="form-item">
+                            <label for="update-icon">Icon</label>
+                            <ha-icon-picker type="text" id="update-icon" value="${this._currentItem.icon || ''}">
+                            </ha-icon-picker>
+                        </div>
+
+                        <div class="form-item">
+                            <label for="update-last-completed">Last Completed</label>
+                            <div class="datetime-with-now">
+                                <ha-textfield type="datetime-local" id="update-last-completed" value="${lastCompletedValue}">
+                                </ha-textfield>
+                                <mwc-button @click=${this._setNow}>Now</mwc-button>
+                            </div>
+                        </div>
                     </div>
-                    <ha-textfield
-                        type="datetime-local"
-                        id="update-last-completed"
-                        label="Activity Last Completed"
-                        value=${val}
-                    >
-                    </ha-textfield>
-                </div>
+                </form>
                 <mwc-button
                     slot="primaryAction"
                     dialogAction="discard"
@@ -438,28 +478,72 @@ class ActivityManagerCard extends LitElement {
     }
 
     _switchMode(ev) {
-        switch (this._config.mode) {
-            case "basic":
-                this._config.mode = "manage";
-                break;
-            case "manage":
-                this._config.mode = "basic";
-                break;
-        }
+        this._showActions = !this._showActions;
         this.requestUpdate();
+    }
+
+    _completeActivity(ev, activity) {
+        ev.stopPropagation();
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = (now.getMonth() + 1).toString().padStart(2, "0");
+        const day = now.getDate().toString().padStart(2, "0");
+        const hours = now.getHours().toString().padStart(2, "0");
+        const minutes = now.getMinutes().toString().padStart(2, "0");
+        const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+        this._hass.callWS({
+            type: "activity_manager/update",
+            item_id: activity.id,
+            last_completed: currentDateTime,
+        });
+    }
+
+    _setNow() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = (now.getMonth() + 1).toString().padStart(2, "0");
+        const day = now.getDate().toString().padStart(2, "0");
+        const hours = now.getHours().toString().padStart(2, "0");
+        const minutes = now.getMinutes().toString().padStart(2, "0");
+        const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+        
+        this.shadowRoot.querySelector("#update-last-completed").value = currentDateTime;
     }
 
     _updateActivity() {
         if (this._currentItem == null) return;
 
-        let last_completed = this.shadowRoot.querySelector(
-            "#update-last-completed"
+        let name = this.shadowRoot.querySelector("#update-name");
+        let category = this.shadowRoot.querySelector("#update-category");
+        let icon = this.shadowRoot.querySelector("#update-icon");
+        let last_completed = this.shadowRoot.querySelector("#update-last-completed");
+
+        let frequency = {};
+        frequency.days = _getNumber(
+            this.shadowRoot.querySelector("#update-frequency-day").value,
+            0
+        );
+        frequency.hours = _getNumber(
+            this.shadowRoot.querySelector("#update-frequency-hour").value,
+            0
+        );
+        frequency.minutes = _getNumber(
+            this.shadowRoot.querySelector("#update-frequency-minute").value,
+            0
+        );
+        frequency.seconds = _getNumber(
+            this.shadowRoot.querySelector("#update-frequency-second").value,
+            0
         );
 
-        this._hass.callWS({
-            type: "activity_manager/update",
-            item_id: this._currentItem["id"],
+        this._hass.callService("activity_manager", "update_activity", {
+            entity_id: `sensor.${this._currentItem.category.toLowerCase()}_${this._currentItem.name.toLowerCase().replace(/\s+/g, '_')}`,
+            now: false,
             last_completed: last_completed.value,
+            category: category.value,
+            frequency: frequency,
+            icon: icon.value
         });
     }
 
@@ -487,7 +571,7 @@ class ActivityManagerCard extends LitElement {
         .content {
             padding: 0 12px 12px 12px;
         }
-        .am-add-form {
+        .am-add-form, .am-update-form {
             padding-top: 10px;
             display: grid;
             align-items: center;
@@ -576,6 +660,11 @@ class ActivityManagerCard extends LitElement {
             align-items: center;
         }
 
+        .am-action-button {
+            --mdc-icon-button-size: 32px;
+            --mdc-icon-size: 18px;
+        }
+
         .am-due-soon {
             color: var(--am-item-due-soon-primary-color, #ffffff);
             background-color: var(
@@ -598,6 +687,12 @@ class ActivityManagerCard extends LitElement {
             --mdc-shape-small: 0px;
         }
 
+        .form-item-full {
+            display: grid;
+            grid-template-columns: 1fr;
+            --mdc-shape-small: 0px;
+        }
+
         .form-item input::-webkit-outer-spin-button,
         .form-item input::-webkit-inner-spin-button {
             -webkit-appearance: none;
@@ -606,6 +701,16 @@ class ActivityManagerCard extends LitElement {
         .confirm-grid {
             display: grid;
             gap: 12px;
+        }
+
+        .datetime-with-now {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .datetime-with-now ha-textfield {
+            flex: 1;
         }
     `;
 }
