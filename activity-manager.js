@@ -96,27 +96,31 @@ class ActivityManagerCard extends LitElement {
         const diffMs = nextDue - now;
         
         const formatter = new Intl.RelativeTimeFormat(undefined, {
-            numeric: "auto",
+            numeric: "always",
         });
         
-        const DIVISIONS = [
-            { amount: 60, name: "seconds" },
-            { amount: 60, name: "minutes" },
-            { amount: 24, name: "hours" },
-            { amount: 7, name: "days" },
-            { amount: 4.34524, name: "weeks" },
-            { amount: 12, name: "months" },
-            { amount: Number.POSITIVE_INFINITY, name: "years" },
-        ];
+        // Convert to different units
+        const seconds = Math.abs(diffMs / 1000);
+        const minutes = seconds / 60;
+        const hours = minutes / 60;
+        const days = hours / 24;
         
-        let duration = diffMs / 1000;
+        const sign = diffMs < 0 ? -1 : 1;
         
-        for (let i = 0; i < DIVISIONS.length; i++) {
-            const division = DIVISIONS[i];
-            if (Math.abs(duration) < division.amount) {
-                return formatter.format(Math.round(duration), division.name);
-            }
-            duration /= division.amount;
+        if (seconds < 60) {
+            return formatter.format(Math.round(seconds) * sign, "seconds");
+        } else if (minutes < 60) {
+            return formatter.format(Math.round(minutes) * sign, "minutes");
+        } else if (hours < 24) {
+            return formatter.format(Math.round(hours) * sign, "hours");
+        } else if (days < 14) {
+            return formatter.format(Math.round(days) * sign, "days");
+        } else if (days < 30) {
+            return formatter.format(Math.round(days / 7) * sign, "weeks");
+        } else if (days < 365) {
+            return formatter.format(Math.round(days / 30.44) * sign, "months");
+        } else {
+            return formatter.format(Math.round(days / 365.25) * sign, "years");
         }
     }
 
@@ -474,7 +478,10 @@ class ActivityManagerCard extends LitElement {
     _showUpdateDialog(item) {
         this._currentItem = item;
         this.requestUpdate();
-        this.shadowRoot.querySelector(".confirm-update").show();
+        // Wait for the next render cycle before showing dialog
+        setTimeout(() => {
+            this.shadowRoot.querySelector(".confirm-update").show();
+        }, 0);
     }
 
     _switchMode(ev) {
