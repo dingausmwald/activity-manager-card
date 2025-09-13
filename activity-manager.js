@@ -362,6 +362,14 @@ class ActivityManagerCard extends LitElement {
                 >
                     Update
                 </mwc-button>
+                <mwc-button
+                    slot="secondaryAction"
+                    dialogAction="discard"
+                    @click=${this._deleteActivityFromDialog}
+                    style="--mdc-theme-primary: var(--error-color, #f44336)"
+                >
+                    Delete
+                </mwc-button>
                 <mwc-button slot="secondaryAction" dialogAction="cancel">
                     Cancel
                 </mwc-button>
@@ -518,6 +526,14 @@ class ActivityManagerCard extends LitElement {
         this.shadowRoot.querySelector("#update-last-completed").value = currentDateTime;
     }
 
+    _deleteActivityFromDialog() {
+        if (this._currentItem == null) return;
+
+        this._hass.callService("activity_manager", "remove_activity", {
+            entity_id: `sensor.${this._currentItem.category.toLowerCase()}_${this._currentItem.name.toLowerCase().replace(/\s+/g, '_')}`
+        });
+    }
+
     _updateActivity() {
         if (this._currentItem == null) return;
 
@@ -640,10 +656,9 @@ class ActivityManagerCard extends LitElement {
         }
 
         .am-icon {
-            display: block;
-            border-radius: 50%;
-            background-color: #333;
-            padding: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             margin-right: 12px;
             --mdc-icon-size: 24px;
         }
@@ -665,11 +680,29 @@ class ActivityManagerCard extends LitElement {
             display: grid;
             grid-template-columns: auto auto;
             align-items: center;
+            justify-content: end;
+            margin-right: -4px;
         }
 
         .am-action-button {
-            --mdc-icon-button-size: 32px;
-            --mdc-icon-size: 18px;
+            --mdc-icon-button-size: 40px;
+            --mdc-icon-size: 20px;
+        }
+
+        .am-action-button:first-child {
+            position: relative;
+            margin-right: 12px;
+        }
+
+        .am-action-button:first-child::after {
+            content: '';
+            position: absolute;
+            right: -6px;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 60%;
+            width: 1px;
+            background-color: var(--divider-color, #e0e0e0);
         }
 
         .am-due-soon {
