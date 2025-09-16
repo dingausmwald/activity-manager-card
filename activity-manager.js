@@ -40,9 +40,6 @@ class ActivityManagerCard extends LitElement {
         this._config.mode = config.mode || "basic";
         this._config.soonHours = config.soonHours || 24;
         this._config.icon = config.icon || "mdi:format-list-checkbox";
-
-        this._runOnce = false;
-        this._fetchData();
     }
 
     firstUpdated() {
@@ -51,18 +48,7 @@ class ActivityManagerCard extends LitElement {
 
     set hass(hass) {
         this._hass = hass;
-        if (!this._runOnce) {
-            // Update when loading
-            this._fetchData();
-
-            // Update when changes are made
-            this._hass.connection.subscribeEvents(
-                () => this._fetchData(),
-                "activity_manager_updated"
-            );
-
-            this._runOnce = true;
-        }
+        this._updateActivities();
     }
 
     _getStateClass(activity) {
@@ -436,13 +422,26 @@ class ActivityManagerCard extends LitElement {
         manageEl.close();
     }
 
-    _fetchData = async () => {
-        const items =
-            (await this._hass?.callWS({
-                type: "activity_manager/items",
-            })) || [];
+    _updateActivities() {
+        if (!this._hass || !this._config) return;
 
-        this._activities = items
+        const activities = [];
+        Object.keys(this._hass.states).forEach(entityId => {
+            const entity = this._hass.states[entityId];
+            if (entity.attributes?.integration === 'activity_manager') {
+                const activity = {
+                    id: entity.entity_id,
+                    name: entity.attributes.friendly_name || entity.attributes.name,
+                    category: entity.attributes.category,
+                    icon: entity.attributes.icon,
+                    last_completed: entity.attributes.last_completed,
+                    frequency_ms: entity.attributes.frequency_ms
+                };
+                activities.push(activity);
+            }
+        });
+
+        this._activities = activities
             .filter((item) => {
                 if ("category" in this._config)
                     return (
@@ -472,20 +471,16 @@ class ActivityManagerCard extends LitElement {
                     .toLowerCase()
                     .localeCompare(b["category"].toLowerCase());
             });
-
-        this.requestUpdate();
-    };
+    }
 
     _showRemoveDialog(ev, item) {
         ev.stopPropagation();
         this._currentItem = item;
-        this.requestUpdate();
         this.shadowRoot.querySelector(".confirm-remove").show();
     }
 
     _showUpdateDialog(item) {
         this._currentItem = item;
-        this.requestUpdate();
         // Wait for the next render cycle before showing dialog
         setTimeout(() => {
             this.shadowRoot.querySelector(".confirm-update").show();
@@ -494,7 +489,6 @@ class ActivityManagerCard extends LitElement {
 
     _switchMode(ev) {
         this._showActions = !this._showActions;
-        this.requestUpdate();
     }
 
     _completeActivity(ev, activity) {
@@ -573,9 +567,8 @@ class ActivityManagerCard extends LitElement {
     _removeActivity() {
         if (this._currentItem == null) return;
 
-        this._hass.callWS({
-            type: "activity_manager/remove",
-            item_id: this._currentItem["id"],
+        this._hass.callService("activity_manager", "remove_activity", {
+            entity_id: this._currentItem["id"]
         });
     }
 
