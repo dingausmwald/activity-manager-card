@@ -148,8 +148,6 @@ class ActivityManagerCard extends LitElement {
                     </div>
                 </div>
             </ha-card>
-            ${this._renderAddDialog()} ${this._renderUpdateDialog()}
-            ${this._renderRemoveDialog()}
         `;
     }
 
@@ -187,62 +185,70 @@ class ActivityManagerCard extends LitElement {
         `;
     }
 
-    _renderAddDialog() {
+    _showAddDialog() {
         const date = new Date();
         const year = date.getFullYear();
         const month = (date.getMonth() + 1).toString().padStart(2, "0");
         const day = date.getDate().toString().padStart(2, "0");
         const hours = date.getHours().toString().padStart(2, "0");
         const minutes = date.getMinutes().toString().padStart(2, "0");
-        let val = `${year}-${month}-${day}T${hours}:${minutes}`;
+        const val = `${year}-${month}-${day}T${hours}:${minutes}`;
 
-        return html`
-            <ha-dialog class="manage-form" heading="Add Activity for ${this._config["category"]}">
-                <form>
-                    <div class="am-add-form" >
-                        <input
-                            type="hidden"
-                            id="category"
-                            placeholder="Category"
-                            value="${this._config["category"]}" />
-
-                        <div class="form-item">
-                            <ha-textfield type="text" id="name" placeholder="Name" style="grid-column: 1 / span 2">
-                            </ha-textfield>
-                        </div>
-                        
-                        <div class="form-item">
-                            <label for="frequency-day">Frequency</label>
-                            <div class="duration-input">
-                                <ha-textfield type="number" inputmode="numeric" no-spinner label="dd" id="frequency-day" value="0"></ha-textfield>
-                                <ha-textfield type="number" inputmode="numeric" no-spinner label="hh" id="frequency-hour" value="0"></ha-textfield>
-                                <ha-textfield type="number" inputmode="numeric" no-spinner label="mm" id="frequency-minute" value="0"></ha-textfield>
-                                <ha-textfield type="number" inputmode="numeric" no-spinner label="ss"id="frequency-second" value="0"></ha-textfield>
-                            </div>
-                        </div>
-
-                        <div class="form-item">
-                            <label for="icon">Icon</label>
-                            <ha-icon-picker type="text" id="icon">
-                            </ha-icon-picker>
-                        </div>
-
-                        <div class="form-item">
-                            <label for="last-completed">Last Completed</label>
-                            <ha-textfield type="datetime-local" id="last-completed" value=${val}>
-                            </ha-textfield>
+        const dialog = document.createElement('ha-dialog');
+        dialog.heading = `Add Activity for ${this._config["category"]}`;
+        dialog.innerHTML = `
+            <style>
+                .am-add-form { padding-top: 10px; display: grid; align-items: center; gap: 24px; }
+                .duration-input { display: flex; flex-direction: row; align-items: center; }
+                .form-item { display: grid; grid-template-columns: 1fr 1.8fr; align-items: center; --mdc-shape-small: 0px; }
+            </style>
+            <form>
+                <div class="am-add-form">
+                    <input type="hidden" id="category" value="${this._config["category"]}" />
+                    <div class="form-item">
+                        <ha-textfield type="text" id="name" placeholder="Name" style="grid-column: 1 / span 2"></ha-textfield>
+                    </div>
+                    <div class="form-item">
+                        <label>Frequency</label>
+                        <div class="duration-input">
+                            <ha-textfield type="number" inputmode="numeric" no-spinner label="dd" id="frequency-day" value="0"></ha-textfield>
+                            <ha-textfield type="number" inputmode="numeric" no-spinner label="hh" id="frequency-hour" value="0"></ha-textfield>
+                            <ha-textfield type="number" inputmode="numeric" no-spinner label="mm" id="frequency-minute" value="0"></ha-textfield>
+                            <ha-textfield type="number" inputmode="numeric" no-spinner label="ss" id="frequency-second" value="0"></ha-textfield>
                         </div>
                     </div>
-                    </ha-form>
-                </form>
-                <mwc-button slot="primaryAction" dialogAction="discard" @click=${this._addActivity}>
-                    Add
-                </mwc-button>
-                <mwc-button slot="secondaryAction" dialogAction="cancel">
-                    Cancel
-                </mwc-button>
-            </ha-dialog>
+                    <div class="form-item">
+                        <label>Icon</label>
+                        <ha-icon-picker type="text" id="icon"></ha-icon-picker>
+                    </div>
+                    <div class="form-item">
+                        <label>Last Completed</label>
+                        <ha-textfield type="datetime-local" id="last-completed" value="${val}"></ha-textfield>
+                    </div>
+                </div>
+            </form>
+            <mwc-button slot="primaryAction" dialogAction="discard">Add</mwc-button>
+            <mwc-button slot="secondaryAction" dialogAction="cancel">Cancel</mwc-button>
         `;
+        
+        document.body.appendChild(dialog);
+        dialog.querySelector('[slot="primaryAction"]').addEventListener('click', () => {
+            const frequency = {
+                days: _getNumber(dialog.querySelector("#frequency-day").value, 0),
+                hours: _getNumber(dialog.querySelector("#frequency-hour").value, 0),
+                minutes: _getNumber(dialog.querySelector("#frequency-minute").value, 0),
+                seconds: _getNumber(dialog.querySelector("#frequency-second").value, 0)
+            };
+            this._hass.callService("activity_manager", "add_activity", {
+                name: dialog.querySelector("#name").value,
+                category: dialog.querySelector("#category").value,
+                frequency: frequency,
+                icon: dialog.querySelector("#icon").value,
+                last_completed: dialog.querySelector("#last-completed").value
+            });
+        });
+        dialog.addEventListener('closed', () => document.body.removeChild(dialog));
+        dialog.show();
     }
 
     _renderHeader() {
@@ -256,11 +262,7 @@ class ActivityManagerCard extends LitElement {
                 </div>
                 <div class="action-container">
                     <mwc-icon-button
-                        @click=${() => {
-                            this.shadowRoot
-                                .querySelector(".manage-form")
-                                .show();
-                        }}
+                        @click=${() => this._showAddDialog()}
                     >
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -290,137 +292,7 @@ class ActivityManagerCard extends LitElement {
         `;
     }
 
-    _renderUpdateDialog() {
-        if (!this._currentItem) return html``;
-        
-        const lastCompleted = new Date(this._currentItem.last_completed);
-        const year = lastCompleted.getFullYear();
-        const month = (lastCompleted.getMonth() + 1).toString().padStart(2, "0");
-        const day = lastCompleted.getDate().toString().padStart(2, "0");
-        const hours = lastCompleted.getHours().toString().padStart(2, "0");
-        const minutes = lastCompleted.getMinutes().toString().padStart(2, "0");
-        const lastCompletedValue = `${year}-${month}-${day}T${hours}:${minutes}`;
 
-        return html`
-            <ha-dialog class="confirm-update" heading="Edit Activity">
-                <form>
-                    <div class="am-update-form">
-                        <div class="form-item-full">
-                            <ha-textfield type="text" id="update-name" label="Name" value="${this._currentItem.name}">
-                            </ha-textfield>
-                        </div>
-
-                        <div class="form-item-full">
-                            <ha-textfield type="text" id="update-category" label="Category" value="${this._currentItem.category}">
-                            </ha-textfield>
-                        </div>
-                        
-                        <div class="form-item">
-                            <label for="update-frequency-day">Frequency</label>
-                            <div class="duration-input">
-                                <ha-textfield type="number" inputmode="numeric" no-spinner label="dd" id="update-frequency-day" value="${Math.floor(this._currentItem.frequency_ms / (1000 * 60 * 60 * 24))}"></ha-textfield>
-                                <ha-textfield type="number" inputmode="numeric" no-spinner label="hh" id="update-frequency-hour" value="${Math.floor((this._currentItem.frequency_ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))}"></ha-textfield>
-                                <ha-textfield type="number" inputmode="numeric" no-spinner label="mm" id="update-frequency-minute" value="${Math.floor((this._currentItem.frequency_ms % (1000 * 60 * 60)) / (1000 * 60))}"></ha-textfield>
-                                <ha-textfield type="number" inputmode="numeric" no-spinner label="ss" id="update-frequency-second" value="${Math.floor((this._currentItem.frequency_ms % (1000 * 60)) / 1000)}"></ha-textfield>
-                            </div>
-                        </div>
-
-                        <div class="form-item">
-                            <label for="update-icon">Icon</label>
-                            <ha-icon-picker type="text" id="update-icon" value="${this._currentItem.icon || ''}">
-                            </ha-icon-picker>
-                        </div>
-
-                        <div class="form-item">
-                            <label for="update-last-completed">Last Completed</label>
-                            <div class="datetime-with-now">
-                                <ha-textfield type="datetime-local" id="update-last-completed" value="${lastCompletedValue}">
-                                </ha-textfield>
-                                <mwc-button @click=${this._setNow}>Now</mwc-button>
-                            </div>
-                        </div>
-                    </div>
-                </form>
-                <mwc-button
-                    slot="primaryAction"
-                    dialogAction="discard"
-                    @click=${this._updateActivity}
-                >
-                    Update
-                </mwc-button>
-                <mwc-button
-                    slot="secondaryAction"
-                    dialogAction="discard"
-                    @click=${this._deleteActivityFromDialog}
-                    style="--mdc-theme-primary: var(--error-color, #f44336)"
-                >
-                    Delete
-                </mwc-button>
-                <mwc-button slot="secondaryAction" dialogAction="cancel">
-                    Cancel
-                </mwc-button>
-            </ha-dialog>
-        `;
-    }
-
-    _renderRemoveDialog() {
-        return html`
-            <ha-dialog class="confirm-remove" heading="Confirm">
-                <div>
-                    Remove
-                    ${this._currentItem ? this._currentItem["name"] : ""}?
-                </div>
-                <mwc-button
-                    slot="primaryAction"
-                    dialogAction="discard"
-                    @click=${this._removeActivity}
-                >
-                    Remove
-                </mwc-button>
-                <mwc-button slot="secondaryAction" dialogAction="cancel">
-                    Cancel
-                </mwc-button>
-            </ha-dialog>
-        `;
-    }
-
-    _addActivity() {
-        let name = this.shadowRoot.querySelector("#name");
-        let category = this.shadowRoot.querySelector("#category");
-        let icon = this.shadowRoot.querySelector("#icon");
-        let last_completed = this.shadowRoot.querySelector("#last-completed");
-
-        let frequency = {};
-        frequency.days = _getNumber(
-            this.shadowRoot.querySelector("#frequency-day").value,
-            0
-        );
-        frequency.hours = _getNumber(
-            this.shadowRoot.querySelector("#frequency-hour").value,
-            0
-        );
-        frequency.minutes = _getNumber(
-            this.shadowRoot.querySelector("#frequency-minute").value,
-            0
-        );
-        frequency.seconds = _getNumber(
-            this.shadowRoot.querySelector("#frequency-second").value,
-            0
-        );
-
-        this._hass.callService("activity_manager", "add_activity", {
-            name: name.value,
-            category: category.value,
-            frequency: frequency,
-            icon: icon.value,
-            last_completed: last_completed.value,
-        });
-        name.value = "";
-        icon.value = "";
-
-        let manageEl = this.shadowRoot.querySelector(".manage-form");
-        manageEl.close();
-    }
 
     _updateActivities() {
         if (!this._hass || !this._config) return;
@@ -476,15 +348,121 @@ class ActivityManagerCard extends LitElement {
     _showRemoveDialog(ev, item) {
         ev.stopPropagation();
         this._currentItem = item;
-        this.shadowRoot.querySelector(".confirm-remove").show();
+        
+        const dialog = document.createElement('ha-dialog');
+        dialog.heading = 'Confirm';
+        dialog.innerHTML = `
+            <div>Remove ${item.name}?</div>
+            <mwc-button slot="primaryAction" dialogAction="discard">Remove</mwc-button>
+            <mwc-button slot="secondaryAction" dialogAction="cancel">Cancel</mwc-button>
+        `;
+        
+        document.body.appendChild(dialog);
+        dialog.querySelector('[slot="primaryAction"]').addEventListener('click', () => {
+            this._hass.callService("activity_manager", "remove_activity", {
+                entity_id: this._currentItem["id"]
+            });
+        });
+        dialog.addEventListener('closed', () => document.body.removeChild(dialog));
+        dialog.show();
     }
 
     _showUpdateDialog(item) {
         this._currentItem = item;
-        // Wait for the next render cycle before showing dialog
-        setTimeout(() => {
-            this.shadowRoot.querySelector(".confirm-update").show();
-        }, 0);
+        
+        const lastCompleted = new Date(item.last_completed);
+        const year = lastCompleted.getFullYear();
+        const month = (lastCompleted.getMonth() + 1).toString().padStart(2, "0");
+        const day = lastCompleted.getDate().toString().padStart(2, "0");
+        const hours = lastCompleted.getHours().toString().padStart(2, "0");
+        const minutes = lastCompleted.getMinutes().toString().padStart(2, "0");
+        const lastCompletedValue = `${year}-${month}-${day}T${hours}:${minutes}`;
+
+        const dialog = document.createElement('ha-dialog');
+        dialog.heading = 'Edit Activity';
+        dialog.innerHTML = `
+            <style>
+                .am-update-form { padding-top: 10px; display: grid; align-items: center; gap: 24px; }
+                .duration-input { display: flex; flex-direction: row; align-items: center; }
+                .form-item { display: grid; grid-template-columns: 1fr 1.8fr; align-items: center; --mdc-shape-small: 0px; }
+                .form-item-full { display: grid; grid-template-columns: 1fr; --mdc-shape-small: 0px; }
+                .datetime-with-now { display: flex; align-items: center; gap: 8px; }
+                .datetime-with-now ha-textfield { flex: 1; }
+            </style>
+            <form>
+                <div class="am-update-form">
+                    <div class="form-item-full">
+                        <ha-textfield type="text" id="update-name" label="Name" value="${item.name}"></ha-textfield>
+                    </div>
+                    <div class="form-item-full">
+                        <ha-textfield type="text" id="update-category" label="Category" value="${item.category}"></ha-textfield>
+                    </div>
+                    <div class="form-item">
+                        <label>Frequency</label>
+                        <div class="duration-input">
+                            <ha-textfield type="number" inputmode="numeric" no-spinner label="dd" id="update-frequency-day" value="${Math.floor(item.frequency_ms / (1000 * 60 * 60 * 24))}"></ha-textfield>
+                            <ha-textfield type="number" inputmode="numeric" no-spinner label="hh" id="update-frequency-hour" value="${Math.floor((item.frequency_ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))}"></ha-textfield>
+                            <ha-textfield type="number" inputmode="numeric" no-spinner label="mm" id="update-frequency-minute" value="${Math.floor((item.frequency_ms % (1000 * 60 * 60)) / (1000 * 60))}"></ha-textfield>
+                            <ha-textfield type="number" inputmode="numeric" no-spinner label="ss" id="update-frequency-second" value="${Math.floor((item.frequency_ms % (1000 * 60)) / 1000)}"></ha-textfield>
+                        </div>
+                    </div>
+                    <div class="form-item">
+                        <label>Icon</label>
+                        <ha-icon-picker type="text" id="update-icon" value="${item.icon || ''}"></ha-icon-picker>
+                    </div>
+                    <div class="form-item">
+                        <label>Last Completed</label>
+                        <div class="datetime-with-now">
+                            <ha-textfield type="datetime-local" id="update-last-completed" value="${lastCompletedValue}"></ha-textfield>
+                            <mwc-button id="now-btn">Now</mwc-button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+            <mwc-button slot="primaryAction" dialogAction="discard">Update</mwc-button>
+            <mwc-button slot="secondaryAction" dialogAction="discard" style="--mdc-theme-primary: var(--error-color, #f44336)">Delete</mwc-button>
+            <mwc-button slot="secondaryAction" dialogAction="cancel">Cancel</mwc-button>
+        `;
+        
+        document.body.appendChild(dialog);
+        
+        dialog.querySelector('#now-btn').addEventListener('click', () => {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = (now.getMonth() + 1).toString().padStart(2, "0");
+            const d = now.getDate().toString().padStart(2, "0");
+            const h = now.getHours().toString().padStart(2, "0");
+            const min = now.getMinutes().toString().padStart(2, "0");
+            dialog.querySelector("#update-last-completed").value = `${y}-${m}-${d}T${h}:${min}`;
+        });
+        
+        dialog.querySelector('[slot="primaryAction"]').addEventListener('click', () => {
+            const frequency = {
+                days: _getNumber(dialog.querySelector("#update-frequency-day").value, 0),
+                hours: _getNumber(dialog.querySelector("#update-frequency-hour").value, 0),
+                minutes: _getNumber(dialog.querySelector("#update-frequency-minute").value, 0),
+                seconds: _getNumber(dialog.querySelector("#update-frequency-second").value, 0)
+            };
+            this._hass.callService("activity_manager", "update_activity", {
+                entity_id: `sensor.${this._currentItem.category.toLowerCase()}_${this._currentItem.name.toLowerCase().replace(/\s+/g, '_')}`,
+                name: dialog.querySelector("#update-name").value,
+                now: false,
+                last_completed: dialog.querySelector("#update-last-completed").value,
+                category: dialog.querySelector("#update-category").value,
+                frequency: frequency,
+                icon: dialog.querySelector("#update-icon").value
+            });
+        });
+        
+        const deleteBtn = dialog.querySelectorAll('[slot="secondaryAction"]')[0];
+        deleteBtn.addEventListener('click', () => {
+            this._hass.callService("activity_manager", "remove_activity", {
+                entity_id: `sensor.${this._currentItem.category.toLowerCase()}_${this._currentItem.name.toLowerCase().replace(/\s+/g, '_')}`
+            });
+        });
+        
+        dialog.addEventListener('closed', () => document.body.removeChild(dialog));
+        dialog.show();
     }
 
     _switchMode(ev) {
@@ -508,61 +486,6 @@ class ActivityManagerCard extends LitElement {
         });
     }
 
-    _setNow() {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = (now.getMonth() + 1).toString().padStart(2, "0");
-        const day = now.getDate().toString().padStart(2, "0");
-        const hours = now.getHours().toString().padStart(2, "0");
-        const minutes = now.getMinutes().toString().padStart(2, "0");
-        const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
-        
-        this.shadowRoot.querySelector("#update-last-completed").value = currentDateTime;
-    }
-
-    _deleteActivityFromDialog() {
-        if (this._currentItem == null) return;
-
-        this._hass.callService("activity_manager", "remove_activity", {
-            entity_id: `sensor.${this._currentItem.category.toLowerCase()}_${this._currentItem.name.toLowerCase().replace(/\s+/g, '_')}`
-        });
-    }
-
-    _updateActivity() {
-        if (this._currentItem == null) return;
-
-        let name = this.shadowRoot.querySelector("#update-name");
-        let category = this.shadowRoot.querySelector("#update-category");
-        let icon = this.shadowRoot.querySelector("#update-icon");
-        let last_completed = this.shadowRoot.querySelector("#update-last-completed");
-
-        let frequency = {};
-        frequency.days = _getNumber(
-            this.shadowRoot.querySelector("#update-frequency-day").value,
-            0
-        );
-        frequency.hours = _getNumber(
-            this.shadowRoot.querySelector("#update-frequency-hour").value,
-            0
-        );
-        frequency.minutes = _getNumber(
-            this.shadowRoot.querySelector("#update-frequency-minute").value,
-            0
-        );
-        frequency.seconds = _getNumber(
-            this.shadowRoot.querySelector("#update-frequency-second").value,
-            0
-        );
-
-        this._hass.callService("activity_manager", "update_activity", {
-            entity_id: `sensor.${this._currentItem.category.toLowerCase()}_${this._currentItem.name.toLowerCase().replace(/\s+/g, '_')}`,
-            now: false,
-            last_completed: last_completed.value,
-            category: category.value,
-            frequency: frequency,
-            icon: icon.value
-        });
-    }
 
     _removeActivity() {
         if (this._currentItem == null) return;
