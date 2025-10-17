@@ -444,7 +444,7 @@ class ActivityManagerCard extends LitElement {
                 seconds: _getNumber(dialog.querySelector("#update-frequency-second").value, 0)
             };
             this._hass.callService("activity_manager", "update_activity", {
-                entity_id: `sensor.${this._currentItem.category.toLowerCase()}_${this._currentItem.name.toLowerCase().replace(/\s+/g, '_')}`,
+                entity_id: this._currentItem.id,
                 name: dialog.querySelector("#update-name").value,
                 now: false,
                 last_completed: dialog.querySelector("#update-last-completed").value,
@@ -457,7 +457,7 @@ class ActivityManagerCard extends LitElement {
         const deleteBtn = dialog.querySelectorAll('[slot="secondaryAction"]')[0];
         deleteBtn.addEventListener('click', () => {
             this._hass.callService("activity_manager", "remove_activity", {
-                entity_id: `sensor.${this._currentItem.category.toLowerCase()}_${this._currentItem.name.toLowerCase().replace(/\s+/g, '_')}`
+                entity_id: this._currentItem.id
             });
         });
         
@@ -479,10 +479,10 @@ class ActivityManagerCard extends LitElement {
         const minutes = now.getMinutes().toString().padStart(2, "0");
         const currentDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
 
-        this._hass.callWS({
-            type: "activity_manager/update",
-            item_id: activity.id,
-            last_completed: currentDateTime,
+        this._hass.callService("activity_manager", "update_activity", {
+            entity_id: activity.id,
+            now: false,
+            last_completed: currentDateTime
         });
     }
 
